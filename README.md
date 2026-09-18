@@ -1,0 +1,24 @@
+# lenguaje-m-editor-avanzado
+
+Limpieza de datos escrita directamente en código M (Editor Avanzado de Power Query, sin usar los botones de la interfaz) sobre una tabla de ventas de TechStore con espacios sueltos, mayúsculas inconsistentes y registros de prueba.
+
+## Contenido
+
+- `script_limpieza.md` — el código M completo y comentado paso a paso.
+- `README.md` — este documento.
+
+## ¿Qué hace exactamente el bloque `let...in` en lenguaje M? ¿Por qué cada paso puede referenciar al anterior?
+
+`let` define una lista de variables — en Power Query cada una se llama "paso" — donde cada línea es `NombreDelPaso = expresión`. `in` indica cuál de esas variables es el resultado final que la consulta entrega. La clave es que M es un lenguaje **funcional**: cada paso no modifica nada "en el lugar", sino que toma como entrada el resultado de un paso anterior (por nombre, ej. `Table.TransformColumns(LimpiarEspacios, ...)`) y devuelve una tabla *nueva*. Por eso cada paso puede referenciar al anterior: el nombre del paso previo es simplemente una variable más dentro del mismo `let`, disponible para cualquier paso que venga después de haberla definido — igual que en cualquier lenguaje de programación no se puede usar una variable antes de declararla. Esto es lo que arma la "cadena" visible en el panel de Pasos Aplicados: `Origen → LimpiarEspacios → EstandarizarCategoria → EliminarPruebas → TiparColumnas`, donde romper un nombre en el medio (por ejemplo, referenciar `Limpiar_Espacios` cuando el paso se llama `LimpiarEspacios`) rompe toda la cadena a partir de ahí.
+
+## ¿Por qué M es Case Sensitive y qué consecuencia práctica tiene? Dé un ejemplo de un error que esto puede causar.
+
+M distingue mayúsculas de minúsculas en absolutamente todo: nombres de funciones nativas, nombres de columnas y nombres de pasos definidos por el usuario. `Table.SelectRows` existe; `table.selectrows` no — el motor no aplica ninguna normalización automática, así que la segunda forma tira un error de identificador no reconocido. La consecuencia práctica más concreta en este mismo ejercicio: si se hubiera escrito el filtro como `each [categoria] <> "prueba"` (minúscula) en vez de `"Prueba"`, la comparación de texto también es case sensitive, y como el paso `EstandarizarCategoria` deja la columna con Title Case (`"Prueba"`, con P mayúscula), el filtro con `"prueba"` en minúscula no habría coincidido con ninguna fila — el resultado final tendría 7 filas en vez de 5, con los dos registros de prueba todavía adentro, sin que Power Query avise ningún error (la consulta corre "bien", solo que el resultado es incorrecto).
+
+## ¿Cuál es la diferencia entre usar `Text.Trim` y `Text.Clean` en M?
+
+`Text.Trim` elimina únicamente los espacios en blanco al principio y al final de un texto (por ejemplo, `Text.Trim(" Laptop Pro 15 ")` da `"Laptop Pro 15"`, pero no toca ningún espacio que esté en el medio del texto). `Text.Clean`, en cambio, elimina los caracteres de control no imprimibles del texto (como saltos de línea, tabulaciones o caracteres invisibles que a veces vienen pegados de un export mal formateado o de copiar y pegar desde otro sistema) — no está pensado para espacios en blanco "normales", sino para basura de codificación que ni siquiera se ve en pantalla. En este ejercicio se usó `Text.Trim` porque el problema real de `nombre_producto` eran espacios visibles al inicio/final (`" Laptop Pro 15 "`), no caracteres de control; si el dataset hubiera traído, por ejemplo, un salto de línea oculto dentro de un nombre de producto, ahí sí habría hecho falta `Text.Clean` además de (o en combinación con) `Text.Trim`.
+
+## ¿Por qué filtraste los registros "PRUEBA" después de estandarizar la categoría y no antes?
+
+Porque el filtro compara texto de forma exacta y case sensitive, y antes de estandarizar la columna `categoria` puede tener la misma categoría escrita de formas distintas (`"PRUEBA"`, pero en otro dataset real también podría aparecer como `"prueba"` o `"Prueba"`). Si el filtro `Table.SelectRows(..., each [categoria] <> "Prueba")` se aplicara **antes** del paso `EstandarizarCategoria`, solo eliminaría las filas que coincidan con exactamente esa grafía — cualquier variante de mayúsculas/minúsculas distinta se colaría al reporte final sin que nada avise el error. Estandarizar primero con `Text.Proper` garantiza que **todas** las variantes de "prueba" converjan a una única grafía (`"Prueba"`) antes de que el filtro se aplique, así el filtro solo necesita conocer una forma de escribirlo para atrapar todos los casos. En los datos de prueba de este ejercicio las dos filas con categoría "PRUEBA" ya vienen en mayúsculas exactas, así que en este caso puntual el orden no habría cambiado el resultado numérico — pero el principio (estandarizar antes de filtrar por texto) es el que evita que el script se rompa silenciosamente el día que llegue un dataset real con casing menos prolijo.
