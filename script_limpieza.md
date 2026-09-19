@@ -15,17 +15,20 @@ let // Paso 1: Fuente de datos original
             {7, "Webcam HD", "Accesorios", 85.00, #date(2024, 3, 12)}
         },
         {"id_venta", "nombre_producto", "categoria", "precio", "fecha_venta"}
-    ), // No modificar este paso: es el resultado de "Especificar datos" cargando la tabla de prueba
+    ), // No modificar este paso: tabla de prueba reproducida con Table.FromRows (equivalente a lo que genera "Especificar datos")
 
     // Paso 2: Eliminar espacios en blanco al inicio y al final
-    // de la columna nombre_producto usando Text.Trim. Va primero porque
-    // los pasos siguientes (estandarizar, filtrar) no dependen de los
-    // espacios sueltos, así que no hay razón para dejarlo para después.
+    // de la columna nombre_producto usando Text.Trim. Los espacios sueltos
+    // son invisibles pero rompen comparaciones exactas, uniones (merge) y
+    // agrupaciones: " Laptop Pro 15 " y "Laptop Pro 15" contarían como
+    // productos distintos. Se hace primero para que todo lo que venga
+    // después trabaje con nombres ya limpios.
     LimpiarEspacios = Table.TransformColumns(Origen, {{"nombre_producto", Text.Trim, type text}}),
 
     // Paso 3: Estandarizar la columna categoria a Title Case con Text.Proper,
-    // para unificar "computación", "COMPUTACIÓN"/"PRUEBA" y "Computación"/"Prueba"
-    // bajo una única grafía antes de filtrar.
+    // para que variantes como "computación" y "Computación", o "accesorios"
+    // y "Accesorios", queden bajo una única grafía (y "PRUEBA" pase a
+    // "Prueba"), antes de filtrar por texto.
     EstandarizarCategoria = Table.TransformColumns(LimpiarEspacios, {{"categoria", Text.Proper, type text}}),
 
     // Paso 4: Filtrar y eliminar registros de prueba.
